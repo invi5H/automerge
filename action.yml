@@ -1,0 +1,59 @@
+name: "Automatically merge PRs"
+description: "This action automatically merges dependabot dependencies"
+author: "mridul_aggarwal@yahoo.co.in"
+
+inputs:
+  DEBUG:
+    description: "Output additional context metadata"
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: GitHub context
+      if: ${{ inputs.DEBUG == 'true' }}
+      shell: bash
+      run: echo "$GITHUB_CONTEXT"
+      env:
+        GITHUB_CONTEXT: ${{ toJSON(github) }}
+
+    - name: Verify Dependabot
+      if: ${{ (github.actor != 'dependabot[bot]') || (github.event_name != 'pull_request_target') }}
+      shell: bash
+      run: |
+        echo "Incorrect usage of this action."
+        exit 1
+
+    - name: Fetch Metadata
+      id: metadata
+      uses: dependabot/fetch-metadata@v1.3.0
+      with:
+        github-token: "${{ github.token }}"
+
+    - name: Dependabot Context
+      if: ${{ inputs.DEBUG == 'true' }}
+      shell: bash
+      run: echo "$DEPENDABOT_CONTEXT"
+      env:
+        DEPENDABOT_CONTEXT: ${{ toJSON(steps.metadata.outputs) }}
+
+    - name: Approve
+      shell: bash
+      run: gh pr review --approve "${{ env.PR }}"
+      if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      env:
+        PR: ${{ github.event.pull_request.html_url }}
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Merge
+      shell: bash
+      run: gh pr merge --auto --merge "${{ env.PR }}"
+      if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      env:
+        PR: ${{ github.event.pull_request.html_url }}
+        GITHUB_TOKEN: ${{ github.token }}
+
+branding:
+  icon: "git-pull-request"
+  color: "blue"
